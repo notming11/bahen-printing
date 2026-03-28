@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { MockFile, PrintSettings } from '../types'
 import { LOREM_PARAGRAPHS } from '../data'
 import { ArrowRight, CircleAlert, FileIcon } from 'lucide-react'
