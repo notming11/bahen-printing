@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import type { MockFile, PrintSettings } from '../types'
 import { LOREM_PARAGRAPHS } from '../data'
 import { ArrowRight, CircleAlert, FileIcon } from 'lucide-react'
+import docImage from '../assets/doc.png'
 
 
 function parsePages(input: string | undefined, total: number): number[] {
@@ -46,7 +47,7 @@ function EmptyState({ onOpenFile }: { onOpenFile: () => void }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-slate-100 overflow-hidden min-h-0">
       <img
-        src="src\assets\doc.png"
+        src={docImage}
         alt="No document"
         className="w-28 h-auto opacity-80"
       />
