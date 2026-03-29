@@ -1,15 +1,44 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import type { MockFile, PrintSettings } from '../types'
-import { LOREM_PARAGRAPHS } from '../data'
+import { LOREM, LOREM_PARAGRAPHS } from '../data'
 import { ArrowRight, CircleAlert, FileIcon } from 'lucide-react'
+
+
+function parsePages(input: string | undefined, total: number): number[] {
+  if (!input || input.toLowerCase() === 'all') {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  
+  const pages = new Set<number>()
+  const parts = input.split(',')
+  
+  for (const part of parts) {
+    const range = part.trim().split('-')
+    if (range.length === 1) {
+      const p = parseInt(range[0], 10)
+      if (!isNaN(p) && p >= 1 && p <= total) pages.add(p)
+    } else if (range.length === 2) {
+      const start = parseInt(range[0], 10)
+      const end = parseInt(range[1], 10)
+      if (!isNaN(start) && !isNaN(end)) {
+        for (let i = Math.max(1, start); i <= Math.min(total, end); i++) {
+          pages.add(i)
+        }
+      }
+    }
+  }
+  
+  const result = Array.from(pages).sort((a, b) => a - b)
+  return result.length > 0 ? result : [1] // Default to page 1 if invalid
+}
 
 interface Props {
   file: MockFile | null
   settings: PrintSettings
-  onOpenFile: () => void   
+  onOpenFile: () => void
 }
 const PAGE_RATIO = 1.414 // A4 
-const A4_WIDTH_CM = 21.0  
+const A4_WIDTH_CM = 21.0
 
 const FALLBACK_MARGIN = { label: 'Normal', t: 2.54, b: 2.54, l: 2.54, r: 2.54 }
 
@@ -23,25 +52,38 @@ function EmptyState({ onOpenFile }: { onOpenFile: () => void }) {
       />
       <p className="font-sans text-sm text-slate-500">No document open</p>
       <p className="font-mono text-xs text-slate-400 flex flex-row gap-2">
-        File <ArrowRight className='h-4 w-4'/> select a document to begin
+        File <ArrowRight className='h-4 w-4' /> select a document to begin
       </p>
-      <button 
+      <button
         onClick={onOpenFile}
         className="flex flex-row gap-1 mt-2 px-2 py-1.5 text-xs font-mono bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer"
       >
-        <span><FileIcon className='h-3 w-3'/></span> Open file 
+        <span><FileIcon className='h-3 w-3' /></span> Open file
       </button>
     </div>
   )
 }
 
-function PageContent({ nup, opacity = 1 }: { nup: number; opacity?: number }) {
+function PageContent({ nup, opacity = 1, page = 1 }: { nup: number; opacity?: number; page: number }) {
   const fs = Math.max(3.5, 11 / Math.sqrt(nup))
   const mb = Math.max(2, 7 / Math.sqrt(nup))
-  const paras = nup > 1 ? LOREM_PARAGRAPHS.slice(0, 1) : LOREM_PARAGRAPHS
+
+  const shift = (page - 1) % LOREM_PARAGRAPHS.length
+  const shiftedParagraphs = [...LOREM_PARAGRAPHS.slice(shift), ...LOREM_PARAGRAPHS.slice(0, shift)]
+
+  const paras = nup > 1 ? shiftedParagraphs.slice(0, 1) : shiftedParagraphs
 
   return (
     <div style={{ opacity, transition: 'opacity 0.35s' }}>
+      <div style={{ 
+        fontFamily: '"IBM Plex Sans", sans-serif', 
+        fontSize: fs * 1.4, 
+        fontWeight: 700, 
+        marginBottom: mb,
+        color: '#2563eb' 
+      }}>
+      </div>
+
       {paras.map((p, i) => (
         <p key={i} style={{
           fontFamily: '"IBM Plex Sans", sans-serif',
@@ -67,9 +109,10 @@ interface PageProps {
   showCutoff: boolean
   file: MockFile
   scaleMultiplier: number
+  page: number[]
 }
 
-function RenderedPage({ pw, ph, mT, mB, mL, mR, nup, isFront, showLabel, showCutoff, file, scaleMultiplier }: PageProps) {
+function RenderedPage({ pw, ph, mT, mB, mL, mR, nup, isFront, showLabel, showCutoff, file, scaleMultiplier, page }: PageProps) {
   const nupCols = nup <= 2 ? nup : 2
   const nupRows = Math.ceil(nup / nupCols)
   const contentW = pw - mL - mR
@@ -92,7 +135,7 @@ function RenderedPage({ pw, ph, mT, mB, mL, mR, nup, isFront, showLabel, showCut
         background: '#fff',
         border: '1px solid #d1d5db',
         boxShadow: '0 2px 12px rgba(0,0,0,0.10)',
-        overflow: 'hidden', 
+        overflow: 'hidden',
       }}>
         {/* margin guide */}
         <div style={{
@@ -109,7 +152,7 @@ function RenderedPage({ pw, ph, mT, mB, mL, mR, nup, isFront, showLabel, showCut
           top: mT, left: mL,
           width: contentW,
           height: contentH,
-          overflow: 'hidden', 
+          overflow: 'hidden',
           transition: 'top 0.4s ease, left 0.4s ease, width 0.4s ease, height 0.4s ease',
         }}>
           {nup > 1 ? (
@@ -134,7 +177,7 @@ function RenderedPage({ pw, ph, mT, mB, mL, mR, nup, isFront, showLabel, showCut
                     width: `${Math.ceil(100 / (0.48 / Math.sqrt(nup)))}%`,
                     pointerEvents: 'none',
                   }}>
-                    <PageContent nup={nup} opacity={isFront ? 1 : 0.35} />
+                    <PageContent nup={nup} opacity={isFront ? 1 : 0.35} page={page[i]} />
                   </div>
                   <span style={{
                     position: 'absolute', bottom: 1, right: 2,
@@ -151,7 +194,7 @@ function RenderedPage({ pw, ph, mT, mB, mL, mR, nup, isFront, showLabel, showCut
               width: `${100 / scaleMultiplier}%`,
               pointerEvents: 'none',
             }}>
-              <PageContent nup={1} opacity={isFront ? 1 : 0.3} />
+              <PageContent nup={1} opacity={isFront ? 1 : 0.3} page={page[0]} />
             </div>
           )}
         </div>
@@ -195,11 +238,21 @@ export function DocPreview({ file, settings, onOpenFile }: Props) {
   }, [])
 
   // Guard against undefined margins (e.g. if initial state isn't set yet)
-  const [animM,  setAnimM]  = useState(settings.margins ?? FALLBACK_MARGIN)
-  const [animD,  setAnimD]  = useState(settings.duplex)
-  const [animN,  setAnimN]  = useState(settings.nup)
+  const [animM, setAnimM] = useState(settings.margins ?? FALLBACK_MARGIN)
+  const [animD, setAnimD] = useState(settings.duplex)
+  const [animN, setAnimN] = useState(settings.nup)
   const [animSc, setAnimSc] = useState(settings.scale)
-  const [page,   setPage]   = useState(1)
+  const [pageIndex, setPageIndex] = useState(0)
+
+  const selectedPages = useMemo(() => parsePages(settings.pageRange, file ? file.pages : 1), [settings.pageRange, file])
+
+  useEffect(() => {
+    setPageIndex(0)
+  }, [selectedPages])
+
+  if (!file) {
+    return <EmptyState onOpenFile={onOpenFile} />
+  }
 
   useEffect(() => {
     if (!settings.margins) return
@@ -237,30 +290,39 @@ export function DocPreview({ file, settings, onOpenFile }: Props) {
   const mB = Math.round(m.b * cmToPx)
   const scaleMultiplier = parseFloat(animSc.replace('%', '')) / 100
   const isCutoff = file.cutoff && m.l * cmToPx < (1.5 * cmToPx)
+
+  const pagesPerView = animN * (animD ? 2 : 1)
+  const currentViewPages = selectedPages.slice(pageIndex, pageIndex + pagesPerView)
+  const frontPageNumbers = currentViewPages.slice(0, animN)
+  const backPageNumbers = currentViewPages.slice(animN, animN * 2)
+  const isAtStart = pageIndex === 0
+  const isAtEnd = pageIndex + pagesPerView >= selectedPages.length
+
+
   const pageProps = { pw, ph, mT, mB, mL, mR, nup: animN, file, isCutoff, scaleMultiplier }
 
   return (
     <div ref={containerRef} className="flex-1 bg-slate-100 flex flex-col items-center justify-center overflow-hidden min-h-0 min-w-0 gap-3">
-      
+
       <div style={{ width: pw }} className="flex justify-between items-center font-mono text-xs text-slate-400 shrink-0">
-        <button 
+        <button
           onClick={onOpenFile}
           className="flex flex-row gap-1 mt-2 px-2 py-1.5 text-xs font-mono bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer"
         >
-          <span><FileIcon className='h-3 w-3'/></span> Open file 
+          <span><FileIcon className='h-3 w-3' /></span> Open file
         </button>
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            className={page > 1 ? 'text-[#1e3a5f] cursor-pointer text-base' : 'text-slate-300 cursor-default text-base'}
+            onClick={() => setPageIndex(p => Math.max(0, p - pagesPerView))}
+            className={isAtStart ? 'text-slate-300 cursor-default text-base' : 'text-[#1e3a5f] cursor-pointer text-base'}
           >
             &#8249;
           </button>
-          <span className="text-[#1e3a5f]">{page}/{file.pages}</span>
+          <span className="text-[#1e3a5f]">{pageIndex + 1}/{selectedPages.length}</span>
           <button
-            onClick={() => setPage(p => Math.min(file.pages, p + 1))}
-            className={page < file.pages ? 'text-[#1e3a5f] cursor-pointer text-base' : 'text-slate-300 cursor-default text-base'}
+            onClick={() => setPageIndex(p => Math.min(selectedPages.length - 1, p + pagesPerView))}
+            className={isAtEnd ? 'text-slate-300 cursor-default text-base' : 'text-[#1e3a5f] cursor-pointer text-base'}
           >
             &#8250;
           </button>
@@ -270,22 +332,22 @@ export function DocPreview({ file, settings, onOpenFile }: Props) {
       <div className="flex items-start shrink-0" style={{ transition: 'gap 0.3s' }}>
         {animD ? (
           <>
-            <RenderedPage {...pageProps} isFront={true}  showLabel={true}  showCutoff={isCutoff} />
+            <RenderedPage {...pageProps} isFront={true} showLabel={true} showCutoff={isCutoff} page={frontPageNumbers} />
             <div style={{
               width: spineW, height: ph, flexShrink: 0,
               background: 'linear-gradient(to right,#94a3b8 0%,#e2e8f0 45%,#e2e8f0 55%,#94a3b8 100%)',
               boxShadow: 'inset -2px 0 4px rgba(0,0,0,0.07), inset 2px 0 4px rgba(0,0,0,0.07)',
             }} />
-            <RenderedPage {...pageProps} isFront={false} showLabel={true}  showCutoff={false} />
+            <RenderedPage {...pageProps} isFront={false} showLabel={true} showCutoff={false} page={backPageNumbers} />
           </>
         ) : (
-          <RenderedPage {...pageProps} isFront={true} showLabel={false} showCutoff={isCutoff} />
+          <RenderedPage {...pageProps} isFront={true} showLabel={false} showCutoff={isCutoff} page={frontPageNumbers} />
         )}
       </div>
 
       {isCutoff && (
         <div className="shrink-0 px-4 py-1.5 bg-red-50 border border-red-200 text-red-700 font-mono text-[11px] rounded flex flex-row gap-2">
-          <CircleAlert className='w-4 h-4'/> Content may be cut off. Try <strong>Wide</strong> or <strong>Scale to fit</strong>
+          <CircleAlert className='w-4 h-4' /> Content may be cut off. Try <strong>Wide</strong> or <strong>Scale to fit</strong>
         </div>
       )}
     </div>
