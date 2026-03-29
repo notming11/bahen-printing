@@ -15,7 +15,7 @@ export function usePrintJobs() {
           return a;
         }, 0)
       : totalPages;
-    const sheets = Math.ceil(printPages / settings.nup);
+    const sheets = Math.ceil(printPages / settings.nup_col / settings.nup_row);
     return Math.ceil(sheets / (settings.duplex ? 2 : 1)) * settings.copies;
   }
 
