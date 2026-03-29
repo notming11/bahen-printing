@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import type { MockFile, PrintSettings } from '../types'
-import { LOREM, LOREM_PARAGRAPHS } from '../data'
+import { LOREM_PARAGRAPHS } from '../data'
 import { ArrowRight, CircleAlert, FileIcon } from 'lucide-react'
 
 
